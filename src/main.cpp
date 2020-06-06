@@ -8,23 +8,37 @@
 
 
 #include "wx/wx.h"
-
+#include "wx/socket.h"
+#include "gemini.h"
 
 //----------------------------------------------
-//  DECLARATIONS
+//  INTERFACES
 //----------------------------------------------
 class MyApp : public wxApp
 {
 public:
 	virtual bool OnInit();
+	virtual int OnExit();
 };
 
 class MyFrame : public wxFrame
 {
 public:
 	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size);
-
+	
 private:
+
+	// local variables
+	//
+	bool blnFound;
+	gemini *cGem;
+	wxDatagramSocket *sock;
+	wxIPV4address ipGemini;
+	wxIPV4address ipLocal;
+	unsigned short gemPort;		// UDP port for gemini commands
+
+	// events
+	//
 	void OnConnect(wxCommandEvent& event);		// Connect to Gemini
 	void OnExit(wxCommandEvent& event);			// Disconnect and Exit
 	void OnAbout(wxCommandEvent& event);
@@ -54,16 +68,62 @@ wxIMPLEMENT_APP(MyApp);
 //----------------------------------------
 bool MyApp::OnInit()
 {
+
 	MyFrame *frame = new MyFrame("Gemini Controller", wxPoint(50, 50), wxSize(450, 340));
 	frame->Show(true);
 	return true;
+}
+int MyApp::OnExit()
+{
+	wxSocketBase::Shutdown();
+	return(0);
 }
 
 MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	: wxFrame(NULL, wxID_ANY, title, pos, size)
 {
+	wxString strResult;
+
+	//***************
+	//  Find Gemini via DNS naming and setup socket
+	//
+	if (!ipGemini.Hostname("gemini"))
+	{
+		blnFound = false;
+	}
+	else
+	{
+		// setup UDP port
+		//
+		gemPort = 11110;
+		if (!ipGemini.Service(gemPort))
+		{
+			blnFound = false;
+		}
+		else
+		{
+			// setup local ip
+			//
+			ipLocal.AnyAddress();
+			ipLocal.Service(gemPort);
+
+			// setup the socket
+			//
+			sock = new wxDatagramSocket(ipLocal, wxSOCKET_NONE);
+			sock->SetTimeout(5);		// 5 second timeouts
+
+			// init the gemini object
+			//
+			cGem = new gemini(sock,&ipGemini);
+
+		}
+	}
+
+
+	// UI
+	//
 	wxMenu *menuFile = new wxMenu;
-	menuFile->Append(ID_Hello, "&Connect\tCtrl-C",
+	menuFile->Append(wxID_OPEN, "&Connect\tCtrl-C",
 		"Help string shown in status bar for this menu item");
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
@@ -78,7 +138,16 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	SetMenuBar(menuBar);
 
 	CreateStatusBar();
-	SetStatusText("Welcome to gemctrl!");
+
+	if (blnFound)
+	{
+		strResult.Printf("Gemini found at %s", ipGemini.IPAddress());
+	}
+	else
+	{
+		strResult = "Gemini NOT found!";
+	}
+	SetStatusText(strResult);
 }
 
 
@@ -108,18 +177,20 @@ void MyFrame::OnAbout(wxCommandEvent& event)
 //**********************
 void MyFrame::OnConnect(wxCommandEvent& event)
 {
+	wxIPV4address addr;
+	wxDateTime *dteLocal;
 
-	//***************
-	//  Find Gemini via DNS naming
+
+	//*****************
+	//  get local date
 	//
+	dteLocal = new wxDateTime();
+	cGem->getLocalDateTime(dteLocal);
 
 	//**************
-	//  Get status & display
+	//  Update Status
 	//
-
-
-	wxLogMessage("Hello world from gemctrl!");
-	SetStatusText("Connected to Gemini.");
+	SetStatusText("");
 
 
 }  // end of Connect
