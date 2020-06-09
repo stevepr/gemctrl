@@ -43,6 +43,20 @@ bool gemini::getLocalDateTime( wxDateTime *dteGemini)
 
 } // end of getLocalDateTime
 
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//  WakeUp - wake from sleep mode
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+bool gemini::WakeUp()
+{
+	char msgResponse[255];
+	int retval;
+
+	retval = sendCommand(":hW#", msgResponse);
+
+	return true;
+
+} // end of WakeUp
+
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // sendCommand - send a command and return the response
 //    return value is >= 0 for success = # of bytes returned
@@ -85,8 +99,10 @@ int gemini::sendCommand(wxString strCommand, char *strResponse)
 
 
 	//***********************************
-	// extract response string and return
+	//  success:
+	//		increment datagram number and return
 	//
+	numDatagram++;
 	return numBytes;
 
 } // end of sendCommand

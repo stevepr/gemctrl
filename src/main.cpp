@@ -11,9 +11,9 @@
 #include "wx/socket.h"
 #include "gemini.h"
 
-//----------------------------------------------
-//  INTERFACES
-//----------------------------------------------
+//=======================================
+//  INTERFACE:  MyApp
+//=======================================
 class MyApp : public wxApp
 {
 public:
@@ -21,10 +21,14 @@ public:
 	virtual int OnExit();
 };
 
+//=======================================
+//  INTERFACE:  MyFrame
+//=======================================
 class MyFrame : public wxFrame
 {
 public:
 	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size);
+	virtual void OnClose(wxCloseEvent& event);
 	
 private:
 
@@ -37,21 +41,29 @@ private:
 	wxIPV4address ipLocal;
 	unsigned short gemPort;		// UDP port for gemini commands
 
+	wxTimer m_timer;
+	int ExecCommand;
+	wxDateTime dteExec;			// Time to execute a command (LOCAL timezone)
+
 	// events
 	//
 	void OnConnect(wxCommandEvent& event);		// Connect to Gemini
 	void OnExit(wxCommandEvent& event);			// Disconnect and Exit
 	void OnAbout(wxCommandEvent& event);
 
+	void OnSetTimer(wxCommandEvent& event);
+	void OnTimerEvent(wxTimerEvent& event);
+
 	wxDECLARE_EVENT_TABLE();
 };
 
 //----------------------------
-// EVENT TABLE
+// MyFrame: EVENT TABLE
 //----------------------------
 enum
 {
-	ID_Hello = 1
+	ID_SET_TIMER = 1,
+	ID_TIMER_EVENT = 2
 };
 
 
@@ -59,13 +71,15 @@ wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
 	EVT_MENU(wxID_OPEN, MyFrame::OnConnect)
 	EVT_MENU(wxID_EXIT, MyFrame::OnExit)
 	EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
+	EVT_MENU(ID_SET_TIMER, MyFrame::OnSetTimer)
+	EVT_TIMER(ID_TIMER_EVENT, MyFrame::OnTimerEvent)
 wxEND_EVENT_TABLE()
 
 wxIMPLEMENT_APP(MyApp);
 
-//----------------------------------------
-//  METHODS
-//----------------------------------------
+//============================================
+//  IMPLEMENTATION: MyApp
+//============================================
 bool MyApp::OnInit()
 {
 
@@ -75,12 +89,15 @@ bool MyApp::OnInit()
 }
 int MyApp::OnExit()
 {
-	wxSocketBase::Shutdown();
 	return(0);
 }
 
+//============================================
+//  IMPLEMENTATION MyFrame
+//============================================
 MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
-	: wxFrame(NULL, wxID_ANY, title, pos, size)
+	: wxFrame(NULL, wxID_ANY, title, pos, size),
+	m_timer(this,ID_TIMER_EVENT)
 {
 	wxString strResult;
 
@@ -102,6 +119,8 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 		}
 		else
 		{
+			blnFound = true;		// found it without errors
+
 			// setup local ip
 			//
 			ipLocal.AnyAddress();
@@ -115,7 +134,6 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 			// init the gemini object
 			//
 			cGem = new gemini(sock,&ipGemini);
-
 		}
 	}
 
@@ -124,15 +142,19 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	//
 	wxMenu *menuFile = new wxMenu;
 	menuFile->Append(wxID_OPEN, "&Connect\tCtrl-C",
-		"Help string shown in status bar for this menu item");
+		"Connect to Gemnini");
 	menuFile->AppendSeparator();
 	menuFile->Append(wxID_EXIT);
 
 	wxMenu *menuHelp = new wxMenu;
 	menuHelp->Append(wxID_ABOUT);
 
+	wxMenu *menuActions = new wxMenu;
+	menuActions->Append(ID_SET_TIMER,"&Set Timer");
+
 	wxMenuBar *menuBar = new wxMenuBar;
 	menuBar->Append(menuFile, "&Gemini");
+	menuBar->Append(menuActions, "&Actions");
 	menuBar->Append(menuHelp, "&Help");
 
 	SetMenuBar(menuBar);
@@ -148,12 +170,33 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 		strResult = "Gemini NOT found!";
 	}
 	SetStatusText(strResult);
-}
+
+	// setup timer
+	//
+	ExecCommand = -1;		// no command now
+	m_timer.Start(500);				// fire timer every 1/2 second
+
+} // end of constructor/init
 
 
 //---------------------------------------
-//  EVENT HANDLERS
+//  MyFrame: EVENT HANDLERS
 //---------------------------------------
+
+//*******************
+// Event: OnClose
+//*******************
+void MyFrame::OnClose(wxCloseEvent& event)
+{
+
+	// clean up...
+	//
+	wxDELETE(cGem);
+	wxDELETE(sock);
+
+	wxSocketBase::Shutdown();
+
+} // end of close event
 
 //*******************
 // Event: OnExit
@@ -194,3 +237,82 @@ void MyFrame::OnConnect(wxCommandEvent& event)
 
 
 }  // end of Connect
+
+//*******************
+// Event: OnSetTimer
+//*******************
+void MyFrame::OnSetTimer(wxCommandEvent& event)
+{
+	wxString strNow;
+	wxString::const_iterator end;
+	wxString strExec;
+	wxDateTime dteInput;
+
+	wxTextEntryDialog dlgTime(this,"Enter UTC time to Start tracking (yyyy-mm-dd hh:mm:ss) :","Start Time","yyyy-mm-dd hh:mm:ss", wxOK | wxCANCEL);
+
+	strNow = wxDateTime::UNow().Format("%Y-%m-%d %H:%M:%S",wxDateTime::UTC);
+	dlgTime.SetValue(strNow);
+
+	if (!(dlgTime.ShowModal() == wxID_OK))
+	{
+		return;
+	}
+	strExec = dlgTime.GetValue();
+
+	// now parse new UTC value
+	//
+	if (!dteInput.ParseFormat(strExec, "%Y-%m-%d %H:%M:%S", &end))
+	{
+		wxMessageBox(strExec, "Error parsing Date/Time");
+		return;
+	}
+	else if (end != strExec.end())
+	{
+		wxMessageBox(strExec, "Error parsing Date/Time");
+		return;
+	}
+	dteExec = dteInput.FromTimezone(wxDateTime::UTC);
+
+	// enable timer for WakeUp
+	//
+	ExecCommand = 0;
+
+	// update status bar
+	//
+	strExec = dteInput.Format(" WakeUp Command will be sent at %Y-%m-%d %H:%M:%S UTC") + dteExec.Format(", %Y-%m-%d %H:%M:%S Local Time");
+	SetStatusText(strExec);
+
+} // end of OnSetTimer
+
+//*******************
+// Event: OnTimerEvent
+//*******************
+void MyFrame::OnTimerEvent(wxTimerEvent& event)
+{
+	wxDateTime dteNow;
+	wxString strExec;
+
+	// do we have a pending command?
+	//
+	if (ExecCommand < 0)
+	{
+		return;	// no
+	}
+
+	// have we passed the time to execute our command?
+	//
+	dteNow = wxDateTime::Now();
+	if (dteNow >= dteExec)
+	{
+		// yes...
+		//
+		cGem->WakeUp();
+
+		// done... no more commands to send
+		//
+		ExecCommand = -1;
+		strExec = dteNow.Format(" WakeUp sent at %Y-%m-%d %H:%M:%S UTC",wxDateTime::UTC);
+		SetStatusText(strExec);
+	}
+
+} // end of OnTimerEvent

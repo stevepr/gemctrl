@@ -21,6 +21,11 @@ public:
 	bool getLocalDateTime( wxDateTime *dteGemini );
 
 	//------------------
+	// Wake-up
+	//------------------
+	bool WakeUp();
+
+	//------------------
 	//  send a command
 	//------------------
 	int sendCommand(wxString strCommand, char *strResponse);
