@@ -66,8 +66,8 @@ int gemini::sendCommand(wxString strCommand, char *strResponse)
 {
 	char msgBuffer[100];
 	int numBytes;
-	PUINT32 pNum = (PUINT32) msgBuffer;
-	PUINT32 plastNum = (PUINT32) (msgBuffer + 4);
+	uint32_t *pNum = (uint32_t *) msgBuffer;
+	uint32_t *plastNum = (uint32_t *) (msgBuffer + 4);
 	char *pData = msgBuffer + 8;
 
 

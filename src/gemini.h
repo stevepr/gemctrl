@@ -35,7 +35,7 @@ private:
 	wxIPV4address *addr;
 	unsigned short gemPort;		// UDP port for gemini commands
 
-	UINT32 numDatagram;			// current datagram number
+	uint32_t numDatagram;			// current datagram number
 
 };
 

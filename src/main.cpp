@@ -35,6 +35,7 @@ private:
 	// local variables
 	//
 	bool blnFound;
+	int iError;
 	gemini *cGem;
 	wxDatagramSocket *sock;
 	wxIPV4address ipGemini;
@@ -107,6 +108,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	if (!ipGemini.Hostname("gemini"))
 	{
 		blnFound = false;
+		iError = 0;
 	}
 	else
 	{
@@ -116,6 +118,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 		if (!ipGemini.Service(gemPort))
 		{
 			blnFound = false;
+			iError = 1;
 		}
 		else
 		{
@@ -167,7 +170,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	}
 	else
 	{
-		strResult = "Gemini NOT found!";
+		strResult = "Gemini NOT found! " + wxString::Format("%i",iError);
 	}
 	SetStatusText(strResult);
 
