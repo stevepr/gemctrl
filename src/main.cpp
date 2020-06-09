@@ -100,45 +100,6 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	: wxFrame(NULL, wxID_ANY, title, pos, size),
 	m_timer(this,ID_TIMER_EVENT)
 {
-	wxString strResult;
-
-	//***************
-	//  Find Gemini via DNS naming and setup socket
-	//
-	if (!ipGemini.Hostname("gemini"))
-	{
-		blnFound = false;
-		iError = 0;
-	}
-	else
-	{
-		// setup UDP port
-		//
-		gemPort = 11110;
-		if (!ipGemini.Service(gemPort))
-		{
-			blnFound = false;
-			iError = 1;
-		}
-		else
-		{
-			blnFound = true;		// found it without errors
-
-			// setup local ip
-			//
-			ipLocal.AnyAddress();
-			ipLocal.Service(gemPort);
-
-			// setup the socket
-			//
-			sock = new wxDatagramSocket(ipLocal, wxSOCKET_NONE);
-			sock->SetTimeout(5);		// 5 second timeouts
-
-			// init the gemini object
-			//
-			cGem = new gemini(sock,&ipGemini);
-		}
-	}
 
 
 	// UI
@@ -163,16 +124,6 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	SetMenuBar(menuBar);
 
 	CreateStatusBar();
-
-	if (blnFound)
-	{
-		strResult.Printf("Gemini found at %s", ipGemini.IPAddress());
-	}
-	else
-	{
-		strResult = "Gemini NOT found! " + wxString::Format("%i",iError);
-	}
-	SetStatusText(strResult);
 
 	// setup timer
 	//
@@ -223,21 +174,63 @@ void MyFrame::OnAbout(wxCommandEvent& event)
 //**********************
 void MyFrame::OnConnect(wxCommandEvent& event)
 {
-	wxIPV4address addr;
-	wxDateTime *dteLocal;
+	wxString strResult;
+	wxString strHostname;
+	wxTextEntryDialog dlgHost(this, "Enter hostname of Gemini :", "Connect to Gemini", "gemini", wxOK | wxCANCEL);
 
-
-	//*****************
-	//  get local date
+	//***************
+	//  Find Gemini via DNS naming and setup socket
 	//
-	dteLocal = new wxDateTime();
-	cGem->getLocalDateTime(dteLocal);
+	if (!(dlgHost.ShowModal() == wxID_OK))
+	{
+		return;
+	}
+	strHostname = dlgHost.GetValue();
 
-	//**************
-	//  Update Status
-	//
-	SetStatusText("");
+	if (!ipGemini.Hostname(strHostname))
+	{
+		blnFound = false;
+		iError = 0;
+	}
+	else
+	{
+		// setup UDP port
+		//
+		gemPort = 11110;
+		if (!ipGemini.Service(gemPort))
+		{
+			blnFound = false;
+			iError = 1;
+		}
+		else
+		{
+			blnFound = true;		// found it without errors
 
+			// setup local ip
+			//
+			ipLocal.AnyAddress();
+			ipLocal.Service(gemPort);
+
+			// setup the socket
+			//
+			sock = new wxDatagramSocket(ipLocal, wxSOCKET_NONE);
+			sock->SetTimeout(5);		// 5 second timeouts
+
+			// init the gemini object
+			//
+			cGem = new gemini(sock, &ipGemini);
+		}
+	}
+
+	if (blnFound)
+	{
+		strResult.Printf("Gemini found at %s", ipGemini.IPAddress());
+	}
+	else
+	{
+		strResult = "Gemini NOT found! " + wxString::Format("%i", iError);
+	}
+	SetStatusText(strResult);
 
 }  // end of Connect
 
